@@ -1,0 +1,55 @@
+services:
+  pg-master:
+    build:
+      context: ./master
+    container_name: pg-master
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_master_data:/var/lib/postgresql/data
+      - ./master/conf/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./master/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command: >
+      postgres
+        -c config_file=/etc/postgresql/postgresql.conf
+        -c hba_file=/etc/postgresql/pg_hba.conf
+    environment:
+      POSTGRES_USER: pgadmin
+      POSTGRES_PASSWORD: adminpassword
+      POSTGRES_DB: app_db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgadmin -d app_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pg-replica:
+    build:
+      context: ./replica
+    container_name: pg-replica
+    depends_on:
+      pg-master:
+        condition: service_healthy
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_replica_data:/var/lib/postgresql/data
+      - ./replica/conf/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./replica/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf
+    environment:
+      PGMASTER_HOST: pg-master
+      POSTGRES_USER: pgadmin
+      POSTGRES_PASSWORD: adminpassword
+      POSTGRES_DB: app_db
+      PRIMARY_SLOT_NAME: replica_slot
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgadmin -d app_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_master_data:
+  pg_replica_data:
